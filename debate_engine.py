@@ -158,6 +158,19 @@ def _cross_prompt(topic: str, others: dict[str, str]) -> str:
     )
 
 
+def _rewrite_prompt(topic: str, all_answers: dict[str, str]) -> str:
+    answers_text = "\n\n".join(
+        f"[{name}]:\n{str(resp)[:3000]}" for name, resp in all_answers.items()
+    )
+    return (
+        f"Topic: {topic}\n\n"
+        f"Three AI models each researched this topic independently:\n\n{answers_text}\n\n"
+        "Rewrite the above into ONE clear, easy-to-read summary. "
+        "Merge the strongest points from all three. Remove repetition. "
+        "Use plain language. No need to credit individual models."
+    )
+
+
 def _synthesis_prompt(topic: str, all_answers: dict[str, str], context: str = "") -> str:
     answers_text = "\n\n".join(
         f"[{name}]:\n{resp}" for name, resp in all_answers.items()
@@ -283,16 +296,21 @@ def _append_result(
 
 # ── Main Flow ─────────────────────────────────────────────────
 
-async def research_debate(topic: str, on_event=None, context: str = "", save_folder: str | None = None) -> None:
+async def research_debate(
+    topic: str,
+    on_event=None,
+    context: str = "",
+    save_folder: str | None = None,
+    mode: str = "economy",
+) -> None:
     """
-    Full research + debate + synthesis pipeline:
-    Phase 0 — Web search ดึงข้อมูลสด
-    Phase 1 — ทุก model วิเคราะห์ข้อมูลเดียวกันพร้อมกัน
-    Phase 2 — Cross-debate แต่ละ model ตรวจสอบคำตอบของกันและกัน
-    Phase 3 — Synthesis: Claude รวมข้อดีจากทุก model เป็นคำตอบเดียว
+    Research pipeline. mode="economy": Phase 0+1 + rewrite (no save).
+    mode="report": full Phase 0–3 + cross-debate + save result.md.
 
     on_event: optional async callable(event: dict) — called at key pipeline moments
     """
+    if mode not in ("economy", "report"):
+        mode = "economy"
     async def _emit(event: dict):
         if on_event is None:
             return
@@ -361,6 +379,24 @@ async def research_debate(topic: str, on_event=None, context: str = "", save_fol
     ]:
         print(f"\n--- {name} ({model}) ---")
         print(resp if not isinstance(resp, Exception) else f"[Error: {resp}]")
+
+    if mode == "economy":
+        print(f"\n{SEP}\n[Economy: Rewrite — Merging Phase 1 answers]\n{SEP}")
+        await _emit({"type": "phase_start", "phase": 3, "label": "Synthesis"})
+        phase1_answers = {
+            "Claude": claude_r1 if not isinstance(claude_r1, Exception) else str(claude_r1),
+            "GPT":    gpt_r1    if not isinstance(gpt_r1,    Exception) else str(gpt_r1),
+            "Gemini": gemini_r1 if not isinstance(gemini_r1, Exception) else str(gemini_r1),
+        }
+        print("Rewriting...")
+        try:
+            rewrite = await ask_claude(_rewrite_prompt(topic, phase1_answers))
+        except Exception as e:
+            rewrite = f"[Rewrite failed: {e}]"
+        print(f"\n{SEP}\n[Synthesized Answer]\n{SEP}")
+        print(rewrite)
+        await _emit({"type": "synthesis", "content": rewrite})
+        return
 
     # ── Phase 2: Cross-Debate ────────────────────────────────
     print(f"\n{SEP}\n[Phase 2: Cross-Debate — Each model critiques the others]\n{SEP}")

@@ -59,19 +59,30 @@ uvicorn app:app --reload --port 8000
 # Open: http://localhost:8000
 ```
 
-- Submit a topic in the chat box; all pipeline phases render progressively.
-- Click model tabs (Claude / GPT / Gemini) in Phase 1 and Phase 2 to read each model's response.
+- Submit a topic in the chat box; pipeline phases render progressively.
+- **Economy** (default): toggle unpressed — Phase 0 + Phase 1 + lightweight rewrite; no save, no sidebar entry.
+- **Report**: toggle pressed — full Phase 0–3, saves `result.md`, sidebar refreshes.
+- Click model tabs (Claude / GPT / Gemini) in Phase 1 and Phase 2 (report only) to read each model's response.
 - Phase 3 synthesis is rendered as formatted markdown.
-- The saved file path is shown at the bottom of each response.
-- `debate_engine.research_debate()` accepts an optional `on_event` async callback used by the server to push SSE events — the CLI path passes nothing and is unaffected.
+- The saved file path is shown at the bottom of each response (report mode only).
+- `debate_engine.research_debate()` accepts optional `on_event`, `mode` (`economy` | `report`, default `economy`), and `save_folder` — CLI path passes nothing and runs full report pipeline.
+
+## Pipeline Modes (Web UI)
+
+| Mode | Toggle | Phases | Saves `result.md` | Sidebar |
+|------|--------|--------|-------------------|---------|
+| Economy (default) | Unpressed | 0 + 1 + rewrite | No | No |
+| Report | Pressed | 0 + 1 + 2 + 3 | Yes | Yes |
+
+`POST /api/chat` accepts `mode: "economy" | "report"` (default `"economy"`). Economy follow-ups may pass `folder` for context only — existing `result.md` is not modified unless `mode` is `report`.
 
 ## Pipeline Phases
 
 ```
 Phase 0  Web Search      — DuckDuckGo fetches fresh sources (up to 8 results)
 Phase 1  Research        — All 3 models analyze the same data simultaneously
-Phase 2  Cross-Debate    — Each model critiques the other two's answers
-Phase 3  Synthesis       — Claude merges the best points from all three into one answer
+Phase 2  Cross-Debate    — Each model critiques the other two's answers (report mode only)
+Phase 3  Synthesis       — Claude merges answers (full synthesis in report; rewrite in economy)
 ```
 
 Phase 3 rules:

@@ -28,6 +28,7 @@ jobs: dict[str, asyncio.Queue] = {}
 class ChatRequest(BaseModel):
     topic: str
     folder: str | None = None
+    mode: str = "economy"  # "economy" | "report"
 
 
 @app.post("/api/chat")
@@ -36,6 +37,8 @@ async def start_chat(req: ChatRequest):
     queue: asyncio.Queue = asyncio.Queue()
     jobs[job_id] = queue
 
+    mode = req.mode if req.mode in ("economy", "report") else "economy"
+
     # Load existing result.md as context if continuing a session
     context = ""
     save_folder = None
@@ -43,14 +46,21 @@ async def start_chat(req: ChatRequest):
         result_file = results_dir / req.folder / "result.md"
         if result_file.exists():
             context = result_file.read_text(encoding="utf-8")
-            save_folder = req.folder
+            if mode == "report":
+                save_folder = req.folder
 
     async def on_event(event: dict):
         await queue.put(event)
 
     async def run_pipeline():
         try:
-            await research_debate(req.topic, on_event=on_event, context=context, save_folder=save_folder)
+            await research_debate(
+                req.topic,
+                on_event=on_event,
+                context=context,
+                save_folder=save_folder,
+                mode=mode,
+            )
         except Exception as e:
             await queue.put({"type": "error", "message": str(e)})
         finally:

@@ -484,6 +484,38 @@
     #send-btn:disabled { opacity: 0.4; cursor: default; }
     #send-btn:not(:disabled):hover { opacity: 0.88; }
 
+    #mode-btn {
+      flex-shrink: 0;
+      width: 42px;
+      height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #fff;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      cursor: pointer;
+      color: #6b7280;
+      transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+    }
+
+    #mode-btn:hover:not(:disabled) { background: #a4a4a4; }
+
+    #mode-btn.active {
+      background: #5436DA;
+      border-color: #5436DA;
+      color: #fff;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.25);
+    }
+
+    #mode-btn:disabled { opacity: 0.4; cursor: default; }
+
+    #mode-btn svg {
+      width: 20px;
+      height: 20px;
+      fill: currentColor;
+    }
+
     /* ── Mobile (max-width: 640px) ── */
     @media (max-width: 640px) {
       #hamburger { display: block; }
@@ -556,6 +588,17 @@
 <!-- Input bar -->
 <div id="input-bar">
   <div id="input-inner">
+    <button
+      id="mode-btn"
+      type="button"
+      title="Economy: fast rewrite (no save)  |  Report: full debate + save"
+      aria-pressed="false"
+      aria-label="Report mode"
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm0 2l5 5h-5V4zM8 13h8v2H8v-2zm0 4h8v2H8v-2z"/>
+      </svg>
+    </button>
     <textarea
       id="topic-input"
       rows="1"
@@ -572,6 +615,7 @@
   const historyBanner   = document.getElementById('history-banner');
   const topicInput      = document.getElementById('topic-input');
   const sendBtn         = document.getElementById('send-btn');
+  const modeBtn         = document.getElementById('mode-btn');
   const inputBar        = document.getElementById('input-bar');
   const sessionList     = document.getElementById('session-list');
   const newChatBtn      = document.getElementById('new-chat-btn');
@@ -631,6 +675,15 @@
 
   sendBtn.addEventListener('click', handleSend);
 
+  /* ── Report / Economy mode toggle ── */
+  let reportMode = false;
+
+  modeBtn.addEventListener('click', () => {
+    reportMode = !reportMode;
+    modeBtn.classList.toggle('active', reportMode);
+    modeBtn.setAttribute('aria-pressed', String(reportMode));
+  });
+
   /* ── State ── */
   let running = false;
 
@@ -638,6 +691,7 @@
     running = val;
     topicInput.disabled = val;
     sendBtn.disabled = val;
+    modeBtn.disabled = val;
   }
 
   /* ── Helpers ── */
@@ -1055,7 +1109,11 @@
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic, ...(activeFolder ? { folder: activeFolder } : {}) }),
+        body: JSON.stringify({
+          topic,
+          mode: reportMode ? 'report' : 'economy',
+          ...(activeFolder ? { folder: activeFolder } : {}),
+        }),
       });
 
       if (!res.ok) throw new Error(`Server error ${res.status}`);
