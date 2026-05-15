@@ -3,6 +3,10 @@
 __pycache__/
 *.pyc
 *.pyo
+.results
+.ai/
+.cursor/
+
 
 # results/ — remove this comment to exclude personal research from git
 # results/
