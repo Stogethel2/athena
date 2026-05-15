@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Research Debate Engine</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #fff;
+      color: #1a1a1a;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    #header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 56px;
+      background: #fff;
+      border-bottom: 1px solid #e5e7eb;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      z-index: 200;
+    }
+
+    #header h1 {
+      font-size: 17px;
+      font-weight: 600;
+      color: #111;
+    }
+
+    .badges {
+      display: flex;
+      gap: 8px;
+    }
+
+    .badge {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 999px;
+      color: #fff;
+    }
+
+    .badge-claude  { background: #F59E0B; }
+    .badge-gpt     { background: #10B981; }
+    .badge-gemini  { background: #6366F1; }
+
+    /* ── Hamburger (mobile only) ── */
+    #hamburger {
+      display: none;
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: #374151;
+      padding: 4px 8px;
+      border-radius: 6px;
+      line-height: 1;
+      margin-right: 8px;
+    }
+
+    #hamburger:hover { background: #f3f4f6; }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      position: fixed;
+      top: 56px;
+      left: 0;
+      bottom: 0;
+      width: 220px;
+      background: #f9fafb;
+      border-right: 1px solid #e5e7eb;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      z-index: 150;
+    }
+
+    #sidebar-header {
+      padding: 12px 12px 8px;
+      border-bottom: 1px solid #e5e7eb;
+      flex-shrink: 0;
+    }
+
+    #sidebar-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+    }
+
+    #new-chat-btn {
+      width: 100%;
+      background: none;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 13px;
+      font-family: inherit;
+      color: #374151;
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.15s;
+    }
+
+    #new-chat-btn:hover { background: #f3f4f6; }
+
+    #session-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px 0;
+    }
+
+    .session-item {
+      padding: 10px 14px;
+      cursor: pointer;
+      border-left: 3px solid transparent;
+      transition: background 0.12s;
+    }
+
+    .session-item:hover { background: #f3f4f6; }
+
+    .session-item.active {
+      border-left-color: #5436DA;
+      background: #ede9fc;
+    }
+
+    .session-date {
+      font-size: 11px;
+      color: #9ca3af;
+      margin-bottom: 2px;
+    }
+
+    .session-title {
+      font-size: 13px;
+      color: #111;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .session-empty {
+      padding: 16px 14px;
+      font-size: 13px;
+      color: #9ca3af;
+      font-style: italic;
+    }
+
+    .session-loading {
+      padding: 16px 14px;
+      font-size: 13px;
+      color: #9ca3af;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ── Sidebar overlay backdrop (mobile) ── */
+    #sidebar-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.3);
+      z-index: 140;
+    }
+
+    /* ── Main content area ── */
+    #main {
+      margin-left: 220px;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+    }
+
+    /* ── Message list ── */
+    #messages {
+      position: fixed;
+      top: 56px;
+      left: 220px;
+      right: 0;
+      bottom: 0;
+      overflow-y: auto;
+      padding: 24px 24px 120px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .msg-wrap {
+      display: flex;
+      max-width: 800px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* User bubble — right aligned */
+    .msg-wrap.user {
+      justify-content: flex-end;
+    }
+
+    .msg-wrap.user .bubble {
+      background: #5436DA;
+      color: #fff;
+      border-radius: 18px 18px 4px 18px;
+      padding: 12px 16px;
+      max-width: 70%;
+      white-space: pre-wrap;
+      line-height: 1.5;
+      font-size: 15px;
+    }
+
+    /* Pipeline response — left aligned with avatar */
+    .msg-wrap.pipeline {
+      justify-content: flex-start;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #1a1a2e;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .pipeline-block {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-width: 0;
+    }
+
+    /* ── Empty state ── */
+    #empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      gap: 12px;
+      color: #6b7280;
+      pointer-events: none;
+      min-height: 300px;
+    }
+
+    #empty-state .icon { font-size: 48px; }
+    #empty-state p { font-size: 16px; }
+
+    /* ── Phase sections ── */
+    .phase-section {
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .phase-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      background: #f9fafb;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: 14px;
+      font-weight: 600;
+      color: #374151;
+    }
+
+    .phase-header .counter {
+      margin-left: auto;
+      font-size: 12px;
+      font-weight: 400;
+      color: #9ca3af;
+    }
+
+    .phase-body { padding: 14px; }
+
+    /* Phase 0 status line */
+    .search-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      color: #374151;
+    }
+
+    /* Spinner */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid #d1d5db;
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+
+    /* ── Model tabs ── */
+    .tab-strip {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 12px;
+    }
+
+    .tab-btn {
+      padding: 5px 12px;
+      border-radius: 6px;
+      border: 1px solid #e5e7eb;
+      background: #fff;
+      font-size: 13px;
+      cursor: pointer;
+      color: #6b7280;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .tab-btn.active {
+      background: #5436DA;
+      color: #fff;
+      border-color: #5436DA;
+    }
+
+    .tab-btn.has-content:not(.active) {
+      color: #111;
+      font-weight: 500;
+    }
+
+    .tab-btn:disabled {
+      cursor: default;
+      opacity: 0.5;
+    }
+
+    .tab-content {
+      font-size: 14px;
+      line-height: 1.65;
+      color: #374151;
+      white-space: pre-wrap;
+      max-height: 400px;
+      overflow-y: auto;
+      word-break: break-word;
+    }
+
+    /* ── Synthesis markdown ── */
+    .synthesis-body {
+      font-size: 15px;
+      line-height: 1.7;
+      color: #1a1a1a;
+    }
+
+    .synthesis-body h1, .synthesis-body h2, .synthesis-body h3 {
+      margin: 16px 0 8px;
+      font-weight: 700;
+    }
+
+    .synthesis-body p { margin-bottom: 10px; }
+
+    .synthesis-body ul, .synthesis-body ol {
+      padding-left: 20px;
+      margin-bottom: 10px;
+    }
+
+    .synthesis-body li { margin-bottom: 4px; }
+
+    .synthesis-body table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-bottom: 12px;
+      font-size: 14px;
+    }
+
+    .synthesis-body th, .synthesis-body td {
+      border: 1px solid #e5e7eb;
+      padding: 7px 10px;
+      text-align: left;
+    }
+
+    .synthesis-body th { background: #f9fafb; font-weight: 600; }
+
+    .synthesis-body strong { font-weight: 700; }
+    .synthesis-body em { font-style: italic; }
+    .synthesis-body code {
+      background: #f3f4f6;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-size: 13px;
+    }
+
+    /* ── Saved path ── */
+    .saved-line {
+      font-size: 13px;
+      color: #6b7280;
+      padding: 8px 0 0;
+      border-top: 1px solid #f3f4f6;
+      margin-top: 4px;
+    }
+
+    /* ── History banner ── */
+    #history-banner {
+      display: none;
+      position: sticky;
+      top: 0;
+      background: #ede9fc;
+      border: 1px solid #c4b5fd;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 13px;
+      color: #5436DA;
+      font-weight: 500;
+      margin-bottom: 8px;
+      max-width: 800px;
+      width: 100%;
+      align-self: center;
+    }
+
+    /* ── Input bar ── */
+    #input-bar {
+      position: fixed;
+      bottom: 0;
+      left: 220px;
+      right: 0;
+      background: #fff;
+      border-top: 1px solid #e5e7eb;
+      padding: 12px 24px 16px;
+      z-index: 100;
+    }
+
+    #input-inner {
+      max-width: 800px;
+      margin: 0 auto;
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+    }
+
+    #topic-input {
+      flex: 1;
+      resize: none;
+      border: 1px solid #d1d5db;
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: 15px;
+      font-family: inherit;
+      line-height: 1.5;
+      max-height: 120px;
+      overflow-y: auto;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    #topic-input:focus { border-color: #5436DA; }
+    #topic-input:disabled { background: #f9fafb; color: #9ca3af; }
+
+    #send-btn {
+      padding: 10px 18px;
+      background: #5436DA;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      white-space: nowrap;
+    }
+
+    #send-btn:disabled { opacity: 0.4; cursor: default; }
+    #send-btn:not(:disabled):hover { opacity: 0.88; }
+
+    /* ── Mobile (max-width: 640px) ── */
+    @media (max-width: 640px) {
+      #hamburger { display: block; }
+
+      #sidebar {
+        left: -220px;
+        transition: left 0.22s ease;
+        z-index: 160;
+      }
+
+      #sidebar.open {
+        left: 0;
+      }
+
+      #sidebar-backdrop.open {
+        display: block;
+      }
+
+      #messages {
+        left: 0;
+      }
+
+      #input-bar {
+        left: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<div id="header">
+  <div style="display:flex;align-items:center;gap:4px;">
+    <button id="hamburger" aria-label="Toggle sidebar">&#9776;</button>
+    <h1>Research Debate Engine</h1>
+  </div>
+  <div class="badges">
+    <span class="badge badge-claude">Claude</span>
+    <span class="badge badge-gpt">GPT</span>
+    <span class="badge badge-gemini">Gemini</span>
+  </div>
+</div>
+
+<!-- Sidebar backdrop (mobile) -->
+<div id="sidebar-backdrop"></div>
+
+<!-- Sidebar -->
+<div id="sidebar">
+  <div id="sidebar-header">
+    <div id="sidebar-title">History</div>
+    <button id="new-chat-btn">+ New Chat</button>
+  </div>
+  <div id="session-list">
+    <div class="session-loading">
+      <div class="spinner"></div>
+      Loading…
+    </div>
+  </div>
+</div>
+
+<!-- Messages -->
+<div id="messages">
+  <div id="history-banner">Viewing saved session — read only</div>
+  <div id="empty-state">
+    <div class="icon">🔬</div>
+    <p>What would you like to research?</p>
+  </div>
+</div>
+
+<!-- Input bar -->
+<div id="input-bar">
+  <div id="input-inner">
+    <textarea
+      id="topic-input"
+      rows="1"
+      placeholder="Enter a research topic…"
+    ></textarea>
+    <button id="send-btn">Send</button>
+  </div>
+</div>
+
+<script>
+  /* ── Refs ── */
+  const messagesEl      = document.getElementById('messages');
+  const emptyState      = document.getElementById('empty-state');
+  const historyBanner   = document.getElementById('history-banner');
+  const topicInput      = document.getElementById('topic-input');
+  const sendBtn         = document.getElementById('send-btn');
+  const inputBar        = document.getElementById('input-bar');
+  const sessionList     = document.getElementById('session-list');
+  const newChatBtn      = document.getElementById('new-chat-btn');
+  const hamburger       = document.getElementById('hamburger');
+  const sidebar         = document.getElementById('sidebar');
+  const backdrop        = document.getElementById('sidebar-backdrop');
+
+  /* ── View mode ── */
+  // 'live' | 'history'
+  let viewMode = 'live';
+  let activeFolder = null;
+  let activeTitle = null;
+
+  function setViewMode(mode, title) {
+    viewMode = mode;
+    if (mode === 'live') {
+      historyBanner.style.display = 'none';
+      topicInput.placeholder = 'Enter a research topic…';
+    } else {
+      historyBanner.textContent = `Viewing: ${title || activeFolder}  ·  Type a follow-up to continue this research`;
+      historyBanner.style.display = 'flex';
+      topicInput.placeholder = 'Ask a follow-up question…';
+    }
+  }
+
+  /* ── Mobile sidebar toggle ── */
+  hamburger.addEventListener('click', () => {
+    sidebar.classList.toggle('open');
+    backdrop.classList.toggle('open');
+  });
+
+  backdrop.addEventListener('click', () => {
+    sidebar.classList.remove('open');
+    backdrop.classList.remove('open');
+  });
+
+  function closeSidebarMobile() {
+    if (window.innerWidth <= 640) {
+      sidebar.classList.remove('open');
+      backdrop.classList.remove('open');
+    }
+  }
+
+  /* ── Auto-resize textarea ── */
+  topicInput.addEventListener('input', () => {
+    topicInput.style.height = 'auto';
+    topicInput.style.height = Math.min(topicInput.scrollHeight, 120) + 'px';
+  });
+
+  /* ── Enter = send, Shift+Enter = newline ── */
+  topicInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  });
+
+  sendBtn.addEventListener('click', handleSend);
+
+  /* ── State ── */
+  let running = false;
+
+  function setRunning(val) {
+    running = val;
+    topicInput.disabled = val;
+    sendBtn.disabled = val;
+  }
+
+  /* ── Helpers ── */
+  function appendMessage(role, content) {
+    if (emptyState) emptyState.style.display = 'none';
+
+    const wrap = document.createElement('div');
+    wrap.className = 'msg-wrap ' + role;
+
+    if (role === 'user') {
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.textContent = content;
+      wrap.appendChild(bubble);
+    } else {
+      // pipeline: avatar + block
+      const av = document.createElement('div');
+      av.className = 'avatar';
+      av.textContent = '🔬';
+
+      const block = document.createElement('div');
+      block.className = 'pipeline-block';
+      block.id = content; // content = job_id used as ID hook
+
+      wrap.appendChild(av);
+      wrap.appendChild(block);
+    }
+
+    messagesEl.appendChild(wrap);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return wrap;
+  }
+
+  function getPipelineBlock(jobId) {
+    return document.getElementById(jobId);
+  }
+
+  /* ── Phase section builders ── */
+
+  function buildPhase0Section() {
+    const sec = document.createElement('div');
+    sec.className = 'phase-section';
+    sec.innerHTML = `
+      <div class="phase-header">🔍 Web Search</div>
+      <div class="phase-body">
+        <div class="search-status">
+          <div class="spinner"></div>
+          <span class="search-text">Starting search…</span>
+        </div>
+      </div>`;
+    return sec;
+  }
+
+  function buildModelSection(icon, label, phaseNum) {
+    const sec = document.createElement('div');
+    sec.className = 'phase-section';
+    sec.dataset.phase = phaseNum;
+
+    const header = document.createElement('div');
+    header.className = 'phase-header';
+    header.innerHTML = `${icon} ${label} <span class="counter">0/3 models responded</span>`;
+
+    const body = document.createElement('div');
+    body.className = 'phase-body';
+
+    // Tab strip
+    const strip = document.createElement('div');
+    strip.className = 'tab-strip';
+
+    const models = ['Claude', 'GPT', 'Gemini'];
+    const contents = {};
+
+    models.forEach(name => {
+      const btn = document.createElement('button');
+      btn.className = 'tab-btn';
+      btn.textContent = name;
+      btn.dataset.model = name;
+      btn.disabled = true;
+      btn.addEventListener('click', () => activateTab(sec, name));
+      strip.appendChild(btn);
+      contents[name] = '';
+    });
+
+    const contentArea = document.createElement('div');
+    contentArea.className = 'tab-content';
+    contentArea.textContent = 'Waiting for models…';
+
+    body.appendChild(strip);
+    body.appendChild(contentArea);
+    sec.appendChild(header);
+    sec.appendChild(body);
+
+    sec._responseCount = 0;
+    sec._responses = { Claude: null, GPT: null, Gemini: null };
+    sec._activeTab = null;
+
+    return sec;
+  }
+
+  function activateTab(sec, modelName) {
+    const btns = sec.querySelectorAll('.tab-btn');
+    btns.forEach(b => b.classList.toggle('active', b.dataset.model === modelName));
+    sec._activeTab = modelName;
+
+    const area = sec.querySelector('.tab-content');
+    const resp = sec._responses[modelName];
+    area.textContent = resp !== null ? resp : 'No response yet.';
+  }
+
+  function updateModelSection(sec, modelName, content) {
+    sec._responses[modelName] = content;
+    sec._responseCount++;
+
+    // Update counter
+    const counter = sec.querySelector('.counter');
+    if (counter) counter.textContent = `${sec._responseCount}/3 models responded`;
+
+    // Enable and mark tab
+    const btn = sec.querySelector(`.tab-btn[data-model="${modelName}"]`);
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.add('has-content');
+    }
+
+    // Auto-activate first arrived tab
+    if (sec._activeTab === null) {
+      activateTab(sec, modelName);
+    } else if (sec._activeTab === modelName) {
+      // Refresh content if already active
+      const area = sec.querySelector('.tab-content');
+      area.textContent = content;
+    }
+  }
+
+  function buildSynthesisSection() {
+    const sec = document.createElement('div');
+    sec.className = 'phase-section';
+    sec.innerHTML = `
+      <div class="phase-header">✨ Synthesis</div>
+      <div class="phase-body">
+        <div class="search-status">
+          <div class="spinner"></div>
+          <span>Synthesizing…</span>
+        </div>
+      </div>`;
+    return sec;
+  }
+
+  /* ── SSE event handlers ── */
+
+  function handleEvent(block, event, phases) {
+    const { type } = event;
+
+    if (type === 'searching') {
+      const sec = buildPhase0Section();
+      sec.querySelector('.search-text').textContent = `Searching: "${event.query}"…`;
+      block.appendChild(sec);
+      phases.phase0 = sec;
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    else if (type === 'search_done') {
+      const sec = phases.phase0;
+      if (!sec) return;
+      const statusEl = sec.querySelector('.search-status');
+      statusEl.innerHTML = `✅ Found ${event.count} result${event.count !== 1 ? 's' : ''} for "<em>${escHtml(event.query)}</em>"`;
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    else if (type === 'search_failed') {
+      const sec = phases.phase0;
+      if (!sec) return;
+      const statusEl = sec.querySelector('.search-status');
+      statusEl.innerHTML = `❌ Search failed — using training data only`;
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    else if (type === 'phase_start') {
+      if (event.phase === 1) {
+        const sec = buildModelSection('🤔', 'Research', 1);
+        block.appendChild(sec);
+        phases.phase1 = sec;
+      } else if (event.phase === 2) {
+        const sec = buildModelSection('⚔️', 'Cross-Debate', 2);
+        block.appendChild(sec);
+        phases.phase2 = sec;
+      } else if (event.phase === 3) {
+        const sec = buildSynthesisSection();
+        block.appendChild(sec);
+        phases.phase3 = sec;
+      }
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    else if (type === 'model_response') {
+      const sec = event.phase === 1 ? phases.phase1 : phases.phase2;
+      if (!sec) return;
+      updateModelSection(sec, event.model, event.content);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    else if (type === 'synthesis') {
+      const sec = phases.phase3;
+      if (!sec) return;
+      const body = sec.querySelector('.phase-body');
+      body.innerHTML = '';
+      const div = document.createElement('div');
+      div.className = 'synthesis-body';
+      div.innerHTML = marked.parse(event.content);
+      body.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    else if (type === 'saved') {
+      const line = document.createElement('div');
+      line.className = 'saved-line';
+      line.textContent = `💾 Saved: ${event.path}`;
+      block.appendChild(line);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      loadSessions();
+      // If continuing a session, reload the updated result.md
+      if (activeFolder) {
+        setTimeout(() => selectSession(activeFolder), 600);
+      }
+    }
+
+    else if (type === 'error') {
+      const line = document.createElement('div');
+      line.className = 'saved-line';
+      line.style.color = '#ef4444';
+      line.textContent = `Error: ${event.message}`;
+      block.appendChild(line);
+    }
+  }
+
+  function escHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  /* ── Session sidebar ── */
+
+  async function loadSessions() {
+    try {
+      const res = await fetch('/api/sessions');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const sessions = await res.json();
+      renderSessionList(sessions);
+    } catch (err) {
+      sessionList.innerHTML = `<div class="session-empty">Could not load history</div>`;
+    }
+  }
+
+  function renderSessionList(sessions) {
+    sessionList.innerHTML = '';
+
+    if (!sessions || sessions.length === 0) {
+      sessionList.innerHTML = `<div class="session-empty">No past sessions yet</div>`;
+      return;
+    }
+
+    sessions.forEach(({ folder, title, date }) => {
+      const item = document.createElement('div');
+      item.className = 'session-item';
+      if (folder === activeFolder) item.classList.add('active');
+      item.dataset.folder = folder;
+
+      const dateEl = document.createElement('div');
+      dateEl.className = 'session-date';
+      dateEl.textContent = date || folder.slice(0, 8);
+
+      const titleEl = document.createElement('div');
+      titleEl.className = 'session-title';
+      titleEl.textContent = title || folder;
+
+      item.appendChild(dateEl);
+      item.appendChild(titleEl);
+      item.addEventListener('click', () => selectSession(folder));
+      sessionList.appendChild(item);
+    });
+  }
+
+  async function selectSession(folder) {
+    // Highlight active item immediately
+    activeFolder = folder;
+    document.querySelectorAll('.session-item').forEach(el => {
+      el.classList.toggle('active', el.dataset.folder === folder);
+    });
+
+    // Extract title from sidebar item
+    const item = document.querySelector(`.session-item[data-folder="${folder}"]`);
+    activeTitle = item ? item.querySelector('.session-title').textContent : folder;
+
+    closeSidebarMobile();
+
+    // Clear messages and show loading state
+    clearMessages();
+    setViewMode('history', activeTitle);
+
+    const loadingId = 'history-' + Date.now();
+    appendMessage('pipeline', loadingId);
+    const block = getPipelineBlock(loadingId);
+
+    const spinner = document.createElement('div');
+    spinner.className = 'phase-section';
+    spinner.innerHTML = `
+      <div class="phase-body">
+        <div class="search-status">
+          <div class="spinner"></div>
+          <span>Loading session…</span>
+        </div>
+      </div>`;
+    block.appendChild(spinner);
+
+    try {
+      const res = await fetch(`/api/sessions/${encodeURIComponent(folder)}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const { content } = await res.json();
+
+      // Replace loading spinner with rendered markdown
+      block.innerHTML = '';
+      const sec = document.createElement('div');
+      sec.className = 'phase-section';
+
+      const header = document.createElement('div');
+      header.className = 'phase-header';
+      header.textContent = '📄 ' + folder;
+
+      const body = document.createElement('div');
+      body.className = 'phase-body';
+
+      const md = document.createElement('div');
+      md.className = 'synthesis-body';
+      md.innerHTML = marked.parse(content);
+
+      body.appendChild(md);
+      sec.appendChild(header);
+      sec.appendChild(body);
+      block.appendChild(sec);
+
+      messagesEl.scrollTop = 0;
+    } catch (err) {
+      block.innerHTML = '';
+      const errLine = document.createElement('div');
+      errLine.className = 'saved-line';
+      errLine.style.color = '#ef4444';
+      errLine.textContent = `Failed to load session: ${err.message}`;
+      block.appendChild(errLine);
+    }
+  }
+
+  function clearMessages() {
+    // Remove all message wraps, keep #history-banner and #empty-state in place
+    Array.from(messagesEl.children).forEach(child => {
+      if (child.id !== 'empty-state' && child.id !== 'history-banner') {
+        child.remove();
+      }
+    });
+    emptyState.style.display = 'none';
+  }
+
+  function newChat() {
+    // Deselect session
+    activeFolder = null;
+    activeTitle = null;
+    document.querySelectorAll('.session-item').forEach(el => el.classList.remove('active'));
+
+    // Clear messages
+    clearMessages();
+
+    // Show empty state
+    emptyState.style.display = 'flex';
+
+    // Switch to live mode
+    setViewMode('live');
+
+    // Re-enable input
+    if (!running) {
+      topicInput.disabled = false;
+      sendBtn.disabled = false;
+    }
+
+    topicInput.placeholder = 'Enter a research topic…';
+    closeSidebarMobile();
+    topicInput.focus();
+  }
+
+  newChatBtn.addEventListener('click', newChat);
+
+  /* ── Main submit flow ── */
+
+  async function handleSend() {
+    if (running) return;
+    const topic = topicInput.value.trim();
+    if (!topic) return;
+
+    setRunning(true);
+    topicInput.value = '';
+    topicInput.style.height = 'auto';
+
+    // User message
+    appendMessage('user', topic);
+
+    // Create pipeline block placeholder
+    const jobPlaceholder = 'job-' + Date.now();
+    appendMessage('pipeline', jobPlaceholder);
+    const block = getPipelineBlock(jobPlaceholder);
+
+    // Phase state references
+    const phases = { phase0: null, phase1: null, phase2: null, phase3: null };
+
+    let source = null;
+
+    try {
+      // Start pipeline — include folder when continuing a session
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic, ...(activeFolder ? { folder: activeFolder } : {}) }),
+      });
+
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
+      const { job_id } = await res.json();
+
+      // Open SSE stream
+      source = new EventSource(`/api/stream/${job_id}`);
+
+      source.onmessage = (e) => {
+        let event;
+        try { event = JSON.parse(e.data); } catch { return; }
+
+        if (event.type === 'done') {
+          source.close();
+          setRunning(false);
+          return;
+        }
+
+        handleEvent(block, event, phases);
+      };
+
+      source.onerror = () => {
+        source.close();
+        setRunning(false);
+      };
+
+    } catch (err) {
+      const line = document.createElement('div');
+      line.className = 'saved-line';
+      line.style.color = '#ef4444';
+      line.textContent = `Failed to start: ${err.message}`;
+      block.appendChild(line);
+      setRunning(false);
+      if (source) source.close();
+    }
+  }
+
+  /* ── Init ── */
+  loadSessions();
+</script>
+</body>
+</html>
